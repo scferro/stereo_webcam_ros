@@ -13,15 +13,6 @@ public:
     StereoDepthNode() : Node("stereo_depth_node") {
         // Declare parameters
         this->declare_parameter("config_file", "");
-        this->declare_parameter("camera_index", -1);
-        this->declare_parameter("width", -1);
-        this->declare_parameter("height", -1);
-        this->declare_parameter("frame_rate", -1.0);
-        this->declare_parameter("publish_rgb", true);
-        this->declare_parameter("publish_depth", true);
-        this->declare_parameter("publish_depth_visual", true);
-        this->declare_parameter("use_gpu", true);
-        this->declare_parameter("gpu_device_id", 0);
         
         // Get config file path
         std::string config_file = this->get_parameter("config_file").as_string();
@@ -44,75 +35,6 @@ public:
             RCLCPP_ERROR(this->get_logger(), "Failed to load configuration");
             throw std::runtime_error("Configuration loading failed");
         }
-        
-        // Override with command-line parameters if provided
-        int camera_index = this->get_parameter("camera_index").as_int();
-        int width = this->get_parameter("width").as_int();
-        int height = this->get_parameter("height").as_int();
-        double frame_rate = this->get_parameter("frame_rate").as_double();
-        
-        if (camera_index >= 0) {
-            RCLCPP_INFO(this->get_logger(), "Overriding camera index: %d", camera_index);
-            config_->camera_index = camera_index;
-        }
-        
-        if (width > 0 && height > 0) {
-            RCLCPP_INFO(this->get_logger(), "Overriding resolution: %dx%d", width, height);
-            config_->single_size = cv::Size(width, height);
-            config_->combined_size = cv::Size(width * 2, height);
-        }
-        
-        if (frame_rate > 0) {
-            RCLCPP_INFO(this->get_logger(), "Overriding frame rate: %.1f FPS", frame_rate);
-            config_->frame_rate = frame_rate;
-        }
-        
-        // Override publish control flags
-        config_->publish_rgb = this->get_parameter("publish_rgb").as_bool();
-        config_->publish_depth = this->get_parameter("publish_depth").as_bool();
-        config_->publish_depth_visual = this->get_parameter("publish_depth_visual").as_bool();
-        
-        // Override GPU settings
-        config_->use_gpu = this->get_parameter("use_gpu").as_bool();
-        config_->gpu_device_id = this->get_parameter("gpu_device_id").as_int();
-        
-        RCLCPP_INFO(this->get_logger(), "Publishing RGB: %s", config_->publish_rgb ? "true" : "false");
-        RCLCPP_INFO(this->get_logger(), "Publishing Depth: %s", config_->publish_depth ? "true" : "false");
-        RCLCPP_INFO(this->get_logger(), "Publishing Depth Visual: %s", config_->publish_depth_visual ? "true" : "false");
-        RCLCPP_INFO(this->get_logger(), "GPU Acceleration: %s", config_->use_gpu ? "enabled" : "disabled");
-        
-        // Check CUDA availability
-#ifdef WITH_CUDA_SUPPORT
-        int cuda_devices = cv::cuda::getCudaEnabledDeviceCount();
-        if (config_->use_gpu) {
-            if (cuda_devices > 0) {
-                RCLCPP_INFO(this->get_logger(), "Found %d CUDA-capable device(s)", cuda_devices);
-                
-                // Print CUDA device info
-                if (config_->gpu_device_id < cuda_devices) {
-                    cv::cuda::DeviceInfo device_info(config_->gpu_device_id);
-                    RCLCPP_INFO(this->get_logger(), "Using GPU device %d: %s", 
-                        config_->gpu_device_id, device_info.name().c_str());
-                    RCLCPP_INFO(this->get_logger(), "  Compute capability: %d.%d", 
-                        device_info.majorVersion(), device_info.minorVersion());
-                    RCLCPP_INFO(this->get_logger(), "  Total memory: %.2f GB", 
-                        device_info.totalMemory() / (1024.0 * 1024.0 * 1024.0));
-                } else {
-                    RCLCPP_WARN(this->get_logger(), "Invalid GPU device ID %d. Using device 0 instead.",
-                        config_->gpu_device_id);
-                    config_->gpu_device_id = 0;
-                }
-            } else {
-                RCLCPP_WARN(this->get_logger(), "No CUDA-capable GPU found. Falling back to CPU processing.");
-                config_->use_gpu = false;
-            }
-        }
-#else
-        if (config_->use_gpu) {
-            RCLCPP_WARN(this->get_logger(), "CUDA support not compiled in. GPU acceleration is unavailable.");
-            config_->use_gpu = false;
-        }
-#endif
         
         // Set up ROS logging for DepthVision logger
         auto logger = this->get_logger();
@@ -142,21 +64,15 @@ public:
         processor_ = std::make_unique<DepthVision::DepthProcessor>(*config_);
         
         // Create publishers
-        if (config_->publish_rgb) {
-            rgb_pub_ = image_transport::create_publisher(this, config_->camera_name + "/rgb/image_raw");
-            left_info_pub_ = this->create_publisher<sensor_msgs::msg::CameraInfo>(
-                config_->camera_name + "/rgb/camera_info", 10);
-        }
+        rgb_pub_ = image_transport::create_publisher(this, config_->camera_name + "/rgb/image_raw");
+        depth_pub_ = image_transport::create_publisher(this, config_->camera_name + "/depth/image_raw");
+        depth_visual_pub_ = image_transport::create_publisher(this, config_->camera_name + "/depth/image_visual");
         
-        if (config_->publish_depth) {
-            depth_pub_ = image_transport::create_publisher(this, config_->camera_name + "/depth/image_raw");
-            depth_info_pub_ = this->create_publisher<sensor_msgs::msg::CameraInfo>(
-                config_->camera_name + "/depth/camera_info", 10);
-        }
-        
-        if (config_->publish_depth_visual) {
-            depth_visual_pub_ = image_transport::create_publisher(this, config_->camera_name + "/depth/image_visual");
-        }
+        // Camera info publishers
+        left_info_pub_ = this->create_publisher<sensor_msgs::msg::CameraInfo>(
+            config_->camera_name + "/rgb/camera_info", 10);
+        depth_info_pub_ = this->create_publisher<sensor_msgs::msg::CameraInfo>(
+            config_->camera_name + "/depth/camera_info", 10);
         
         // Create timer for frame capture
         double frame_period = 1.0 / config_->frame_rate;
@@ -210,36 +126,30 @@ private:
         right_info.header.stamp = current_time;
         
         // Publish RGB image
-        if (config_->publish_rgb) {
-            sensor_msgs::msg::Image::SharedPtr rgb_msg = 
-                cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", left_frame).toImageMsg();
-            rgb_msg->header.stamp = current_time;
-            rgb_msg->header.frame_id = config_->rgb_frame_id;
-            rgb_pub_.publish(rgb_msg);
-            
-            // Publish left camera info
-            left_info_pub_->publish(left_info);
-        }
+        sensor_msgs::msg::Image::SharedPtr rgb_msg = 
+            cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", left_frame).toImageMsg();
+        rgb_msg->header.stamp = current_time;
+        rgb_msg->header.frame_id = config_->rgb_frame_id;
+        rgb_pub_.publish(rgb_msg);
+        
+        // Publish left camera info
+        left_info_pub_->publish(left_info);
         
         // Publish depth image if valid
-        if (!depth_map.empty() && (config_->publish_depth || config_->publish_depth_visual)) {
-            // Set depth camera info frame ID
-            right_info.header.frame_id = config_->depth_frame_id;
+        if (!depth_map.empty()) {
+            // Convert to ROS format (meters, 32FC1)
+            sensor_msgs::msg::Image::SharedPtr depth_msg = 
+                cv_bridge::CvImage(std_msgs::msg::Header(), "32FC1", depth_map).toImageMsg();
+            depth_msg->header.stamp = current_time;
+            depth_msg->header.frame_id = config_->depth_frame_id;
+            depth_pub_.publish(depth_msg);
             
-            if (config_->publish_depth) {
-                // Convert to ROS format (meters, 32FC1)
-                sensor_msgs::msg::Image::SharedPtr depth_msg = 
-                    cv_bridge::CvImage(std_msgs::msg::Header(), "32FC1", depth_map).toImageMsg();
-                depth_msg->header.stamp = current_time;
-                depth_msg->header.frame_id = config_->depth_frame_id;
-                depth_pub_.publish(depth_msg);
-                
-                // Publish depth camera info
-                depth_info_pub_->publish(right_info);
-            }
+            // Publish depth camera info (same as left camera info but with depth frame_id)
+            right_info.header.frame_id = config_->depth_frame_id;
+            depth_info_pub_->publish(right_info);
             
             // Publish visualization
-            if (config_->publish_depth_visual && !depth_vis.empty()) {
+            if (!depth_vis.empty()) {
                 sensor_msgs::msg::Image::SharedPtr depth_vis_msg = 
                     cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", depth_vis).toImageMsg();
                 depth_vis_msg->header.stamp = current_time;

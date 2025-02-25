@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(stereo_depth_webcam CXX)
+project(stereo_depth_webcam)
 
 # Default to C++17
 if(NOT CMAKE_CXX_STANDARD)
@@ -8,17 +8,6 @@ endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
-endif()
-
-# Try to find CUDA - optional
-find_package(CUDA QUIET)
-set(HAS_CUDA FALSE)
-if(CUDA_FOUND)
-  set(HAS_CUDA TRUE)
-  set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} -std=c++14)
-  message(STATUS "CUDA found. Enabling GPU support.")
-else()
-  message(STATUS "CUDA not found. GPU support will be disabled.")
 endif()
 
 # Find dependencies
@@ -33,30 +22,8 @@ find_package(stereo_msgs REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(OpenCV REQUIRED)
 find_package(nlohmann_json REQUIRED)
-find_package(CUDA 12.0 REQUIRED)
-
-# Find OpenCV - first try with CUDA components, then fall back to standard
-if(HAS_CUDA)
-  find_package(OpenCV QUIET COMPONENTS core imgproc highgui features2d cudawarping cudafilters cudastereo cudaimgproc cudaarithm)
-  if(NOT OpenCV_FOUND OR NOT OpenCV_CUDA_VERSION)
-    set(HAS_CUDA FALSE)
-    message(STATUS "OpenCV CUDA modules not found. GPU support will be disabled.")
-    find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui features2d)
-  else()
-    message(STATUS "OpenCV CUDA modules found. GPU support enabled.")
-  endif()
-else()
-  find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui features2d)
-endif()
-
-# Define compilation options for GPU support
-if(HAS_CUDA)
-  add_definitions(-DWITH_CUDA_SUPPORT)
-  message(STATUS "Building with CUDA support.")
-else()
-  message(STATUS "Building without CUDA support.")
-endif()
 
 # Include directories
 include_directories(
@@ -64,10 +31,6 @@ include_directories(
   ${OpenCV_INCLUDE_DIRS}
   ${YAML_CPP_INCLUDE_DIR}
 )
-
-if(HAS_CUDA)
-  include_directories(${CUDA_INCLUDE_DIRS})
-endif()
 
 # C++ node executable
 add_executable(stereo_depth_node 
@@ -94,10 +57,6 @@ target_link_libraries(stereo_depth_node
   yaml-cpp
   nlohmann_json::nlohmann_json
 )
-
-if(HAS_CUDA)
-  target_link_libraries(stereo_depth_node ${CUDA_LIBRARIES})
-endif()
 
 # Install C++ executables
 install(TARGETS

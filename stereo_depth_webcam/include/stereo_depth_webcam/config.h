@@ -1,12 +1,6 @@
 #pragma once
 
 #include <opencv2/opencv.hpp>
-
-// Conditionally include CUDA headers
-#ifdef WITH_CUDA_SUPPORT
-#include <opencv2/cuda.hpp>
-#endif
-
 #include <nlohmann/json.hpp>
 #include <iostream>
 #include <fstream>
@@ -37,15 +31,6 @@ namespace DepthVision {
         // Visualization flags
         bool show_depth = true;
         bool show_raw = true;
-        
-        // Publish control flags
-        bool publish_rgb = true;
-        bool publish_depth = true;
-        bool publish_depth_visual = true;
-        
-        // GPU acceleration settings
-        bool use_gpu = true;
-        int gpu_device_id = 0;
         
         // Frame rate control
         double frame_rate = 30.0;
@@ -152,15 +137,6 @@ namespace DepthVision {
                         max_depth = config["depth"]["max_depth"].as<float>();
                 }
                 
-                // GPU settings
-                if (config["gpu"]) {
-                    if (config["gpu"]["enabled"])
-                        use_gpu = config["gpu"]["enabled"].as<bool>();
-                    
-                    if (config["gpu"]["device_id"])
-                        gpu_device_id = config["gpu"]["device_id"].as<int>();
-                }
-                
                 // ROS parameters
                 if (config["ros"]) {
                     if (config["ros"]["camera_name"])
@@ -171,15 +147,6 @@ namespace DepthVision {
                     
                     if (config["ros"]["depth_frame_id"])
                         depth_frame_id = config["ros"]["depth_frame_id"].as<std::string>();
-                    
-                    if (config["ros"]["publish_rgb"])
-                        publish_rgb = config["ros"]["publish_rgb"].as<bool>();
-                    
-                    if (config["ros"]["publish_depth"])
-                        publish_depth = config["ros"]["publish_depth"].as<bool>();
-                    
-                    if (config["ros"]["publish_depth_visual"])
-                        publish_depth_visual = config["ros"]["publish_depth_visual"].as<bool>();
                 }
                 
                 // Display parameters
