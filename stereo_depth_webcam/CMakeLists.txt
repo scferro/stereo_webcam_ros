@@ -23,7 +23,6 @@ find_package(message_filters REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(OpenCV REQUIRED)
-find_package(nlohmann_json REQUIRED)
 
 # Include directories
 include_directories(
@@ -55,7 +54,6 @@ ament_target_dependencies(stereo_depth_node
 target_link_libraries(stereo_depth_node
   ${OpenCV_LIBRARIES}
   yaml-cpp
-  nlohmann_json::nlohmann_json
 )
 
 # Install C++ executables
