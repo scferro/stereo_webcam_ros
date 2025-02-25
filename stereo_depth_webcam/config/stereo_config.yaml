@@ -1,0 +1,26 @@
+camera:
+  index: 0                    # Camera device index
+  width: 640                  # Width of single camera frame
+  height: 480                 # Height of camera frame
+  frame_rate: 30.0            # Camera frame rate
+  calibration_file: "stereo_calibration.json"
+
+depth:
+  min_depth: 0.1              # Minimum depth (meters)
+  max_depth: 4.0              # Maximum depth (meters)
+
+gpu:
+  enabled: true               # Use GPU acceleration if available
+  device_id: 0                # CUDA device ID
+
+ros:
+  camera_name: "stereo_camera"  # Base name for camera topics
+  rgb_frame_id: "camera_rgb_optical_frame"  # TF frame for RGB image
+  depth_frame_id: "camera_depth_optical_frame"  # TF frame for depth image
+  publish_rgb: true           # Whether to publish RGB images
+  publish_depth: true         # Whether to publish raw depth images
+  publish_depth_visual: true  # Whether to publish visualization depth images
+
+display:
+  show_depth: true            # Display depth visualization
+  show_raw: true              # Display raw camera feed
