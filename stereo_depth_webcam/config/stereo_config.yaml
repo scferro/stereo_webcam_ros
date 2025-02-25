@@ -2,7 +2,7 @@ camera:
   index: 0                    # Camera device index
   width: 640                  # Width of single camera frame
   height: 480                 # Height of camera frame
-  frame_rate: 30.0            # Camera frame rate
+  frame_rate: 10.0            # Camera frame rate
   calibration_file: "stereo_calibration.json"
 
 depth:
